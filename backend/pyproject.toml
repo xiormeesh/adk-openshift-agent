@@ -1,0 +1,53 @@
+[tool.poetry]
+name = "adk-openshift-agent"
+version = "0.1.0"
+description = "AI-powered Kubernetes/OpenShift cluster management chatbot"
+authors = ["Your Name <you@example.com>"]
+readme = "README.md"
+packages = [{include = "*.py"}]
+
+[tool.poetry.dependencies]
+python = "^3.12"
+# Google ADK (includes MCP support via adk.tools.mcp)
+google-adk = "*"
+# LiteLLM for OpenAI model integration with ADK
+litellm = "*"
+# OpenAI
+openai = "*"
+# Web Framework
+fastapi = "*"
+uvicorn = {extras = ["standard"], version = "*"}
+pydantic = "*"
+# Environment
+python-dotenv = "*"
+# Utilities (for async HTTP if needed)
+aiohttp = "*"
+# AG-UI server for exposing ADK agents
+ag-ui-adk = "*"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "*"
+black = "*"
+ruff = "*"
+mypy = "*"
+
+[tool.poetry.scripts]
+dev = "main:dev"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.black]
+line-length = 100
+target-version = ['py312']
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.mypy]
+python_version = "3.12"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = false
