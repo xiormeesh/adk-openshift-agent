@@ -245,36 +245,27 @@ import { CopilotKit } from "@copilotkit/react-core";
 - `runtimeUrl`: Next.js API route that connects to backend
 - `agent`: Name of the ADK agent to use (must match backend agent name)
 
-#### 2. CopilotPopup
+#### 2. CopilotChat
 
-Chat popup in bottom-right corner:
+Full-page chat interface:
 
 ```typescript
-import { CopilotPopup } from "@copilotkit/react-ui";
+import { CopilotChat } from "@copilotkit/react-ui";
 import "@copilotkit/react-ui/styles.css";
 
-<CopilotPopup
+<CopilotChat
   instructions="You are a helpful assistant."
   labels={{
     title: "Chat Assistant",
     initial: "Hi! How can I help?"
   }}
+  className="h-full"
 />
 ```
 
-#### 3. CopilotSidebar
-
-Full sidebar chat interface:
-
-```typescript
-import { CopilotSidebar } from "@copilotkit/react-ui";
-
-<CopilotSidebar
-  defaultOpen={true}
-  clickOutsideToClose={false}
-  labels={{...}}
-/>
-```
+**Other chat components:**
+- `CopilotPopup`: Chat popup in bottom-right corner
+- `CopilotSidebar`: Sidebar chat interface
 
 ### Runtime Integration
 
@@ -293,7 +284,7 @@ const serviceAdapter = new ExperimentalEmptyAdapter();
 // Connect to ADK agent via AG-UI
 const runtime = new CopilotRuntime({
   agents: {
-    my_agent: new HttpAgent({ url: `${BACKEND_URL}/` })
+    openshift_assistant: new HttpAgent({ url: `${BACKEND_URL}/` })
   }
 });
 
@@ -308,7 +299,7 @@ export const POST = async (req: NextRequest) => {
 ```
 
 **Important:**
-- Agent name in `agents: { my_agent: ... }` must match backend agent name
+- Agent name in `agents: { openshift_assistant: ... }` must match backend agent name
 - HttpAgent URL points to backend **root**, not a specific endpoint
 - `ExperimentalEmptyAdapter` is for single-agent setups (use other adapters for multi-agent)
 
@@ -332,7 +323,7 @@ export const POST = async (req: NextRequest) => {
 ### Complete Flow
 
 ```
-User types message in CopilotPopup
+User types message in CopilotChat
     ↓
 CopilotKit sends to /api/copilotkit (Next.js API route)
     ↓
@@ -417,23 +408,28 @@ export const POST = async (req: NextRequest) => {
 
 ```typescript
 import { CopilotKit } from "@copilotkit/react-core";
-import { CopilotPopup } from "@copilotkit/react-ui";
+import { CopilotChat } from "@copilotkit/react-ui";
 import "@copilotkit/react-ui/styles.css";
 
 export default function Home() {
   return (
     <CopilotKit runtimeUrl="/api/copilotkit" agent="my_agent">
-      <main>
-        <h1>My App</h1>
-        <CopilotPopup
+      <div className="flex flex-col h-screen">
+        <header>
+          <h1>My App</h1>
+        </header>
+        <CopilotChat
           instructions="You are a helpful assistant."
           labels={{ title: "Assistant", initial: "Hi!" }}
+          className="h-full"
         />
-      </main>
+      </div>
     </CopilotKit>
   );
 }
 ```
+
+**Note:** You can also use `CopilotPopup` for a bottom-right popup or `CopilotSidebar` for a sidebar interface.
 
 That's it! No custom endpoints, no manual session management.
 
@@ -604,9 +600,13 @@ npm install  # Installs @ag-ui/client and other deps
 **CopilotKit:**
 - Official Docs: https://docs.copilotkit.ai/
 - ADK Guide: https://docs.copilotkit.ai/adk
+- CopilotChat Component Reference: https://docs.copilotkit.ai/reference/components/chat/CopilotChat
+- Self-Hosting CopilotKit Runtime: https://docs.copilotkit.ai/direct-to-llm/guides/self-hosting
+- GitHub Repository (source code & latest updates): https://github.com/CopilotKit/CopilotKit
 
 **Examples:**
-- Starter Template: https://github.com/CopilotKit/with-adk
+- **Golden Path Reference**: https://github.com/CopilotKit/with-adk - Working example of CopilotKit + ADK integration with complete frontend and backend code
+- **Interactive Examples Collection**: https://feature-viewer.copilotkit.ai/adk-middleware/feature/agentic_chat?file=page.tsx&view=code - Live demos with viewable source code for CopilotKit + ADK patterns
 - Quick Start: `npx create-ag-ui-app@latest --adk`
 
 **Blog Posts:**
