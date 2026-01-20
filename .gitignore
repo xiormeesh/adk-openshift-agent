@@ -57,3 +57,6 @@ mcp-config.json
 
 # ADK
 *.adk/
+
+# Project-specific
+source/
