@@ -154,6 +154,41 @@ Phase 3 complete when:
 4. Error messages display as PatternFly alerts
 5. Ready to add tool calls in Phase 4 (will test with observability-assistant-ui)
 6. Documentation updated for running both applications
+
+### Future Optimization (Post-PoC)
+
+**TODO: Simplify CopilotKit frontend to connect directly to backend**
+
+Current architecture uses a Next.js API route as a proxy:
+```
+Browser → /api/copilotkit (Next.js) → HttpAgent → Backend (/api/chat)
+```
+
+Potential simplification (like PatternFly does):
+```
+Browser → Backend (/api/chat) directly
+```
+
+**Investigation needed:**
+- Test if CopilotKit can use `runtimeUrl="http://localhost:8000/api/chat"` directly
+- Known issue: CopilotKit sometimes has compatibility issues with FastAPI backends
+- GitHub issue: https://github.com/CopilotKit/CopilotKit/issues/1907
+- If it works, we can remove the Next.js API route entirely
+
+**Priority:** Low - Current proxy approach works fine for PoC
+
+---
+
+**TODO: Evaluate using @ag-ui/client and @ag-ui/core libraries**
+
+The observability-assistant-ui currently implements the ag-ui protocol manually (~500 lines in `useAgUiStream.ts`), while the CopilotKit frontend uses the official `@ag-ui/client` library (~10 lines).
+
+**Potential investigation:**
+- Can `@ag-ui/client` support PatternFly's custom content blocks pattern (interleaved text/steps/tools)?
+- Would using the official library reduce maintenance burden without sacrificing functionality?
+- Does PatternFly integration require the custom implementation, or can they work together?
+
+**Priority:** Low - PoC functionality comes first. Only investigate if maintenance becomes an issue or if ag-ui library adds features we need.
 ## Phase 4
 
 Adding kubernetes-mcp-server integration
