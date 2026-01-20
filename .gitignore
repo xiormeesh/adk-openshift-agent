@@ -55,6 +55,9 @@ logs/
 # MCP
 mcp-config.json
 
+# Playwright
+.playwright-mcp/
+
 # ADK
 *.adk/
 

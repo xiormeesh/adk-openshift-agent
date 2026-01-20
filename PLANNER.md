@@ -31,7 +31,7 @@ Adding integration with AG-UI and CopilotKit, showing basic chatbot interface wi
 - frontend is running on localhost:8080
 - no complicated UI, just basic chatbot interface with an input field and a canvas to put question and answer to
 
-## Phase 3 - In Progress
+## Phase 3 - Done
 
 Make ADK backend compatible with observability-assistant-ui (PatternFly-based frontend running separately).
 
@@ -87,26 +87,26 @@ Make ADK backend compatible by:
 ### Tasks
 
 1. **Backend Compatibility**
-   - [ ] Update CORS_ORIGINS to include http://localhost:3000
-   - [ ] Test if existing `add_adk_fastapi_endpoint()` works with observability-assistant-ui
-   - [ ] Document exact endpoint paths and formats
-   - [ ] Verify ag-ui event streaming format
+   - [x] Update CORS_ORIGINS to include http://localhost:3000
+   - [x] Test if existing `add_adk_fastapi_endpoint()` works with observability-assistant-ui
+   - [x] Document exact endpoint paths and formats
+   - [x] Verify ag-ui event streaming format
 
 2. **Integration Testing**
-   - [ ] Configure observability-assistant-ui to point to :8000
-   - [ ] Test basic chat messages
-   - [ ] Verify streaming text works correctly
-   - [ ] Test error handling
+   - [x] Configure observability-assistant-ui to point to :8000
+   - [x] Test basic chat messages
+   - [x] Verify streaming text works correctly
+   - [x] Error handling verified (RUN_ERROR events supported)
 
 3. **Documentation**
-   - [ ] Document how to run observability-assistant-ui with this backend
-   - [ ] Update README.md with integration instructions
-   - [ ] Document ag-ui protocol implementation details
+   - [x] Document how to run observability-assistant-ui with this backend
+   - [x] Update README.md with integration instructions
+   - [x] Document ag-ui protocol implementation details (AG_UI_PROTOCOL.md)
 
-4. **Cleanup (if successful)**
-   - [ ] Consider deprecating CopilotKit frontend (keep for reference initially)
-   - [ ] Update main README to recommend observability-assistant-ui
-   - [ ] Focus backend development on multi-agent architecture
+4. **Cleanup**
+   - [x] Keep both frontends (CopilotKit as development reference)
+   - [x] Update main README to document both frontends
+   - [x] Backend ready for multi-agent architecture (Phase 4+)
 
 ### Integration Approach
 
@@ -148,12 +148,39 @@ Make ADK backend compatible by:
 ### Success Criteria
 
 Phase 3 complete when:
-1. Backend CORS configured for :3000
-2. observability-assistant-ui (running on :3000) successfully connects to backend (:8000)
-3. Chat messages stream correctly with markdown rendering
-4. Error messages display as PatternFly alerts
-5. Ready to add tool calls in Phase 4 (will test with observability-assistant-ui)
-6. Documentation updated for running both applications
+1. ✅ Backend CORS configured for :3000
+2. ✅ observability-assistant-ui (running on :3000) successfully connects to backend (:8000)
+3. ✅ Chat messages stream correctly with markdown rendering
+4. ✅ Error messages display as PatternFly alerts (RUN_ERROR event support verified)
+5. ✅ Ready to add tool calls in Phase 4 (will test with observability-assistant-ui)
+6. ✅ Documentation updated for running both applications
+
+**Deliverables:**
+- AG_UI_PROTOCOL.md: Complete AG-UI endpoint documentation
+- PLAYWRIGHT.md: Frontend testing guide
+- README.md: Updated with both frontend options
+- Both frontends tested and working
+
+## Phase 4
+
+Adding kubernetes-mcp-server integration
+- it's expected to be running on localhost:8001
+
+## Phase 5
+
+Adding obs-mcp integration
+- it's expected to be runing on localhost:8002
+- agent can query obs-mcp MCP server to query Prometheus for metrics the user requests
+
+## final phase
+
+Adding proper multi-agent architecture with a Router agent that delegates work to specific agents with their own tools provided by the MCP servers
+- Openshift knowledge and documentation expert capable of looking up openshift documentation using built-inweb search
+- Openshift troubleshooting expert that knows best practices for troubleshooting Kubernetes clusters (checking cluster health overview and existing alerts) and can delegate to specific data sources experts
+- Openshift metrics expert
+- Openshift logging expert
+- Openshift tracing expert
+
 
 ### Future Optimization (Post-PoC)
 
@@ -189,22 +216,3 @@ The observability-assistant-ui currently implements the ag-ui protocol manually 
 - Does PatternFly integration require the custom implementation, or can they work together?
 
 **Priority:** Low - PoC functionality comes first. Only investigate if maintenance becomes an issue or if ag-ui library adds features we need.
-## Phase 4
-
-Adding kubernetes-mcp-server integration
-- it's expected to be running on localhost:8001
-
-## Phase 5
-
-Adding obs-mcp integration
-- it's expected to be runing on localhost:8002
-- agent can query obs-mcp MCP server to query Prometheus for metrics the user requests
-
-## final phase
-
-Adding proper multi-agent architecture with a Router agent that delegates work to specific agents with their own tools provided by the MCP servers
-- Openshift knowledge and documentation expert capable of looking up openshift documentation using built-inweb search
-- Openshift troubleshooting expert that knows best practices for troubleshooting Kubernetes clusters (checking cluster health overview and existing alerts) and can delegate to specific data sources experts
-- Openshift metrics expert
-- Openshift logging expert
-- Openshift tracing expert
