@@ -14,7 +14,7 @@ const serviceAdapter = new ExperimentalEmptyAdapter();
 // Create runtime with AG-UI HttpAgent pointing to ADK backend
 const runtime = new CopilotRuntime({
   agents: {
-    openshift_assistant: new HttpAgent({ url: `${BACKEND_URL}/` }),
+    openshift_assistant: new HttpAgent({ url: `${BACKEND_URL}/api/chat` }),
   },
 });
 

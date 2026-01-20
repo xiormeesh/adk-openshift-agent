@@ -10,7 +10,7 @@ Optional Environment Variables:
     OPENAI_MODEL: OpenAI model to use (default: gpt-4-turbo-preview)
     BACKEND_HOST: Server host (default: localhost)
     BACKEND_PORT: Server port (default: 8000)
-    CORS_ORIGINS: Comma-separated list of allowed origins (default: http://localhost:8080)
+    CORS_ORIGINS: Comma-separated list of allowed origins (default: http://localhost:3000,http://localhost:8080)
     KUBECONFIG: Path to kubeconfig file (default: ~/.kube/config)
 
 Example .env file:
@@ -18,7 +18,7 @@ Example .env file:
     OPENAI_MODEL=gpt-4-turbo-preview
     BACKEND_HOST=localhost
     BACKEND_PORT=8000
-    CORS_ORIGINS=http://localhost:8080
+    CORS_ORIGINS=http://localhost:3000,http://localhost:8080
 """
 
 import os
@@ -41,7 +41,7 @@ class Config:
     PORT = int(os.getenv("BACKEND_PORT", "8000"))
 
     # CORS Configuration (for local development)
-    CORS_ORIGINS = os.getenv("CORS_ORIGINS", "http://localhost:8080").split(",")
+    CORS_ORIGINS = os.getenv("CORS_ORIGINS", "http://localhost:3000,http://localhost:8080").split(",")
 
     # MCP Server Configuration
     KUBECONFIG = os.getenv("KUBECONFIG", str(Path.home() / ".kube" / "config"))

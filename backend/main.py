@@ -1,17 +1,21 @@
 """
 FastAPI server for ADK OpenShift Agent.
 
-This backend exposes the ADK agent via AG-UI protocol for CopilotKit integration.
-The frontend connects via AG-UI HttpAgent to communicate with the agent.
+This backend exposes the ADK agent via AG-UI protocol for frontend integration.
+Supports multiple frontends: CopilotKit (Next.js) and PatternFly (observability-assistant-ui).
 
 Architecture:
-    Frontend (CopilotKit) -> Next.js API Route -> AG-UI Protocol -> ADK Agent -> OpenAI
+    Frontend -> AG-UI Protocol (POST /api/chat, SSE streaming) -> ADK Agent -> OpenAI
+
+Supported Frontends:
+    - CopilotKit (localhost:8080): Next.js with HttpAgent
+    - PatternFly (localhost:3000): React + Vite with direct SSE streaming
 
 Key Components:
     - ADK (Agent Development Kit): Google's framework for building AI agents
-    - AG-UI: Protocol for connecting frontends to ADK agents
+    - AG-UI: Protocol for connecting frontends to ADK agents via SSE
     - LiteLLM: Adapter for using OpenAI models with ADK
-    - add_adk_fastapi_endpoint(): Exposes the agent via AG-UI protocol
+    - add_adk_fastapi_endpoint(): Exposes the agent via AG-UI protocol at /api/chat
 """
 
 import logging
@@ -57,8 +61,8 @@ adk_agent = ADKAgent(
     use_in_memory_services=True
 )
 
-# Expose ADK agent via AG-UI protocol
-add_adk_fastapi_endpoint(app, adk_agent, path="/")
+# Expose ADK agent via AG-UI protocol at /api/chat
+add_adk_fastapi_endpoint(app, adk_agent, path="/api/chat")
 
 
 @app.get("/")
