@@ -26,11 +26,24 @@ from ag_ui_adk import ADKAgent, add_adk_fastapi_endpoint
 from agent import root_agent
 from config import config
 
-# Configure logging
+# Configure logging - DEBUG level shows ADK internal flow
+# Including: system instructions, conversation history, tool definitions, tool invocations
 logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    level=logging.DEBUG,
+    format="%(asctime)s - %(levelname)s - %(name)s - %(message)s",
+    handlers=[
+        logging.FileHandler("adk_debug.log"),
+        logging.StreamHandler()
+    ]
 )
+
+# Set specific logger levels for ADK components
+logging.getLogger("google.adk").setLevel(logging.DEBUG)
+logging.getLogger("litellm").setLevel(logging.DEBUG)
+logging.getLogger("ag_ui_adk").setLevel(logging.INFO)  # Reduce noise from AG-UI events
+logging.getLogger("watchfiles").setLevel(logging.WARNING)  # Reduce noise from file watcher
+logging.getLogger("uvicorn").setLevel(logging.INFO)  # Reduce uvicorn noise
+
 logger = logging.getLogger(__name__)
 
 # Validate configuration

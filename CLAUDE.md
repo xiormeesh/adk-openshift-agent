@@ -259,6 +259,27 @@ curl http://localhost:8000/info
 # 4. Test chat in popup
 ```
 
+### Frontend Testing with Playwright MCP
+
+**Primary UI**: PatternFly frontend on http://localhost:3000
+
+When testing frontend functionality, use the Playwright MCP server to:
+- Navigate to http://localhost:3000 (production UI)
+- Send test queries to verify agent responses
+- Check tool call visualization (multi-agent delegation)
+- Verify AG-UI event streaming (RUN_STARTED, TOOL_CALL_*, TEXT_MESSAGE_*)
+
+**Why PatternFly UI is primary:**
+- Production-ready OpenShift-aligned interface
+- Advanced features (tool visualization, Prometheus charts, steps)
+- Main target for Phase 4+ testing
+- CopilotKit (port 8080) remains as development/reference
+
+See `PLAYWRIGHT.md` for detailed testing guide including:
+- UI elements and selectors
+- Test scenarios
+- Troubleshooting tips
+
 ### Phase Completion
 - All acceptance criteria in PLANNER.md must pass
 - User must manually verify functionality
@@ -280,8 +301,37 @@ poetry add package-name
 cd frontend && npm install package-name
 ```
 
+### Process Management
+
+When starting background processes (backend server, etc.):
+
+**Start in subshell:**
+```bash
+( poetry run dev > /tmp/backend.log 2>&1 ) &
+SUBSHELL_PID=$!
+echo "Started process, PID: $SUBSHELL_PID"
+```
+
+**Graceful shutdown (like CTRL+C):**
+```bash
+kill -INT $SUBSHELL_PID  # Send SIGINT (same as CTRL+C)
+sleep 2
+ps -p $SUBSHELL_PID 2>/dev/null || echo "Shutdown complete"
+```
+
+**Why this pattern:**
+- Subshell groups the process and its children
+- `kill -INT` sends SIGINT (signal 2) for graceful shutdown
+- Allows cleanup: finish requests, flush logs, close connections
+- Same behavior as user pressing CTRL+C in terminal
+
+**Signals:**
+- `kill -INT` or `kill -2`: Graceful (like CTRL+C)
+- `kill` or `kill -15`: Graceful (SIGTERM, default)
+- `kill -9`: Forceful (no cleanup, use as last resort)
+
 ### Debugging
-1. Check backend logs: `tail -f /tmp/claude/.../<task-id>.output`
+1. Check backend logs: `tail -f /tmp/backend.log` or task output
 2. Check frontend console (user reports errors)
 3. Fix root cause, not symptoms
 
