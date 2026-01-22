@@ -3,40 +3,44 @@ ADK Agent configuration - Multi-agent architecture (Phase 4).
 
 This module defines the router agent that orchestrates specialized sub-agents.
 
-Architecture Pattern: Agent-as-Tool
+Architecture Pattern: sub_agents (TEMPORARY - see TODO below)
     - Router agent delegates to specialized agents (Kubernetes, Metrics, etc.)
-    - Uses AgentTool wrapper to expose sub-agents as callable tools
-    - LLM decides when to invoke specialized agents
-    - Automatic state and artifact synchronization
+    - Uses sub_agents parameter for better event propagation to frontend
+    - LLM transfers control using transfer_to_agent() function
+    - Shared InvocationContext enables tool call visibility in UI
+
+TODO: Switch back to AgentTool pattern once https://github.com/google/adk-python/pull/3991 merges
+    - PR #3991 adds event streaming propagation from AgentTool
+    - This will allow frontend to see subagent MCP tool calls in real-time
+    - Current sub_agents approach is a workaround for event visibility
+    - AgentTool provides better explicit control over delegation
 
 Current Sub-Agents:
-    - Kubernetes Agent: Cluster exploration expert (currently in stub mode)
+    - Kubernetes Agent: Cluster exploration expert with MCP tools
     - Future: Metrics Agent, Logging Agent, Documentation Agent
 
 Current Status:
     - Router agent: ✓ Working
-    - Kubernetes delegation: ✓ Working (stub mode)
+    - Kubernetes delegation: ✓ Working with MCP tools
     - Multi-agent architecture: ✓ Active
-
-Next Steps:
-    - Enable MCP tools in kubernetes_agent.py
-    - Add more specialized agents (metrics, logging, docs)
+    - Event propagation: Testing sub_agents for better frontend visibility
 """
 
 from google.adk.agents import LlmAgent
 from google.adk.models.lite_llm import LiteLlm
-from google.adk.tools import AgentTool
 from config import config
 from .kubernetes_agent import kubernetes_agent
 
-
-# Wrap the kubernetes_agent as a tool using AgentTool
-# The AgentTool wrapper automatically handles:
-# - Execution of the agent when the LLM calls this tool
-# - State and artifact synchronization back to parent context
-# - Proper return value formatting
-# Note: AgentTool uses the agent's name and instruction as tool metadata
-kubernetes_tool = AgentTool(agent=kubernetes_agent)
+# TEMPORARY: Using sub_agents for better event propagation
+# TODO: Revert to AgentTool once PR #3991 merges
+#
+# Previous AgentTool approach (will restore after PR):
+# from google.adk.tools import AgentTool
+# kubernetes_tool = AgentTool(agent=kubernetes_agent)
+# root_agent = LlmAgent(..., tools=[kubernetes_tool])
+#
+# Current sub_agents approach shares InvocationContext, allowing
+# tool calls from kubernetes_agent to propagate to frontend
 
 
 # Router agent - orchestrates all specialized agents
@@ -48,13 +52,17 @@ You are the orchestrator for an OpenShift/Kubernetes AI assistant system.
 
 Your responsibilities:
 1. Analyze user queries to determine which specialized agent should handle them
-2. Delegate cluster exploration queries to the Kubernetes Agent
+2. Transfer control to the Kubernetes Agent for cluster exploration queries
 3. Relay responses back to the user clearly and concisely
 4. If a query spans multiple domains, coordinate between agents
 
 Current available agents:
-- Kubernetes Agent: Cluster state exploration (pods, namespaces, events, resources, logs)
+- kubernetes_expert: Cluster state exploration (pods, namespaces, events, resources, logs)
 - More agents coming in future phases (metrics, logging, documentation)
+
+Delegation pattern:
+- Use transfer_to_agent(agent_name='kubernetes_expert') to hand off cluster queries
+- The agent will return with its findings, then you relay to the user
 
 Guidelines:
 - Always relay agent responses without modification unless clarification is needed
@@ -62,7 +70,7 @@ Guidelines:
 - Keep responses focused and actionable
 - For general Kubernetes/OpenShift questions that don't require cluster access, you can answer directly
 
-When to delegate to Kubernetes Agent:
+When to transfer to kubernetes_expert:
 - User asks about specific resources in their cluster
 - User wants to see logs, events, or resource usage
 - User needs to inspect cluster state
@@ -74,7 +82,7 @@ When to answer directly:
 - Documentation questions
 - "How do I..." questions that don't require cluster inspection
 """,
-    tools=[kubernetes_tool],
+    sub_agents=[kubernetes_agent],
 )
 
 
