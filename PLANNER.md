@@ -343,9 +343,9 @@ Test scenarios:
 #### Manual Testing Checklist
 
 **Prerequisites:**
-- [ ] kubernetes-mcp-server running on :8001
-- [ ] Backend running on :8000
-- [ ] Kubeconfig with valid cluster access
+- [x] kubernetes-mcp-server running on :8001
+- [x] Backend running on :8000
+- [x] Kubeconfig with valid cluster access
 
 **Test Cases:**
 
@@ -388,9 +388,9 @@ Test scenarios:
 #### Frontend Testing
 
 **PatternFly UI (:3000):**
-- [ ] Tool calls render in collapsed sections
-- [ ] Tool arguments shown
-- [ ] Tool results displayed
+- [x] Tool calls render in collapsed sections
+- [x] Tool arguments shown
+- [x] Tool results displayed
 - [ ] Steps indicator works (if agent uses steps)
 - [ ] Errors display as PatternFly alerts
 

@@ -2,40 +2,21 @@
 Kubernetes Agent - Cluster exploration expert.
 
 This agent handles queries about Kubernetes/OpenShift cluster state using
-MCP tools from kubernetes-mcp-server.
-
-Current Status:
-    - Agent structure: ✓ Working
-    - MCP tools: ✗ Stub (returns mock data for testing)
-
-Next Steps:
-    - Uncomment MCP toolset integration when ready
-    - Connect to kubernetes-mcp-server on :8001
+MCP tools from kubernetes-mcp-server running on port 8001.
 """
 
 from google.adk.agents import LlmAgent
 from google.adk.models.lite_llm import LiteLlm
-# from google.adk.tools.mcp_tool import McpToolset
-# from google.adk.tools.mcp_tool.mcp_session_manager import StdioConnectionParams
-# from mcp import StdioServerParameters
+from google.adk.tools.mcp_tool import McpToolset
+from google.adk.tools.mcp_tool.mcp_session_manager import StreamableHTTPConnectionParams
 from config import config
 
-# TODO: Uncomment when ready to connect to kubernetes-mcp-server
-# kubernetes_toolset = McpToolset(
-#     connection_params=StdioConnectionParams(
-#         server_params=StdioServerParameters(
-#             command='npx',
-#             args=[
-#                 "-y",
-#                 "kubernetes-mcp-server@latest",
-#                 "--port", "8001",
-#             ],
-#             env={
-#                 "KUBECONFIG": config.KUBECONFIG,
-#             },
-#         ),
-#     ),
-# )
+# Connect to kubernetes-mcp-server via HTTP
+kubernetes_toolset = McpToolset(
+    connection_params=StreamableHTTPConnectionParams(
+        url="http://localhost:8001/mcp"
+    )
+)
 
 kubernetes_agent = LlmAgent(
     model=LiteLlm(model=f"openai/{config.OPENAI_MODEL}"),
@@ -75,13 +56,6 @@ kubernetes_agent = LlmAgent(
     - Format YAML/JSON output clearly
     - Explain what the data means
     - Suggest next steps if relevant
-
-    TEMPORARY STUB MODE:
-    You do not have access to MCP tools yet. When asked about cluster state, respond with:
-    "I'm currently in stub mode for testing the multi-agent architecture.
-    Once MCP tools are integrated, I'll be able to query the actual cluster.
-
-    For now, I can explain Kubernetes concepts and answer general questions."
     """,
-    # tools=[kubernetes_toolset],  # Uncomment when MCP is set up
+    tools=[kubernetes_toolset],
 )
