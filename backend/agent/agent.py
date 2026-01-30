@@ -19,8 +19,9 @@ Current Sub-Agents:
     - Kubernetes Agent: Cluster exploration expert with MCP tools
     - Metrics Agent: Prometheus/Thanos metrics expert with MCP tools
     - Incident Detection Agent: Cluster health incident analysis with MCP tools
+    - Insights Agent: Red Hat Insights recommendations expert with MCP tools
     - OpenShift Docs Agent: Documentation expert with Google Search
-    - Future: Insights recommendations, korrel8r Agent
+    - Future: korrel8r Agent
 
 Current Status:
     - Router agent: ✓ Working
@@ -37,6 +38,7 @@ from .kubernetes_agent import kubernetes_agent
 from .metrics_agent import metrics_agent
 from .openshift_docs_agent import openshift_docs_agent
 from .incident_detection_agent import incident_detection_agent
+from .insights_agent import insights_agent
 
 # TEMPORARY: Using sub_agents for better event propagation
 # TODO: Revert to AgentTool once PR #3991 merges
@@ -62,7 +64,7 @@ You are the orchestrator for an OpenShift/Kubernetes AI assistant system.
 
 Your responsibilities:
 1. Analyze user queries to determine which specialized agent should handle them
-2. Transfer control to appropriate agents (Kubernetes, Metrics, Incidents, or Documentation)
+2. Transfer control to appropriate agents (Kubernetes, Metrics, Incidents, Insights, or Documentation)
 3. Relay responses back to the user clearly and concisely
 4. If a query spans multiple domains, coordinate between agents
 
@@ -70,12 +72,14 @@ Current available agents and tools:
 - kubernetes_expert: Cluster state exploration (pods, namespaces, events, resources, logs)
 - metrics_expert: Prometheus/Thanos metrics queries (PromQL, time-series data, metrics analysis)
 - incident_detection_expert: Cluster health incidents and root cause analysis
+- insights_expert: Red Hat Insights recommendations and configuration validation
 - openshift_docs_expert: Search official OpenShift 4.20 documentation (call this as a tool)
 
 Delegation pattern:
 - Use transfer_to_agent(agent_name='kubernetes_expert') for cluster resource queries
 - Use transfer_to_agent(agent_name='metrics_expert') for metrics/observability queries
 - Use transfer_to_agent(agent_name='incident_detection_expert') for incident analysis
+- Use transfer_to_agent(agent_name='insights_expert') for insights recommendations
 - Use openshift_docs_expert tool for documentation questions (called as a regular tool, not transfer_to_agent)
 - The agent will return with its findings, then you relay to the user
 
@@ -113,6 +117,14 @@ SPECIAL CASE - When user asks about alerts:
   * incident_detection_expert provides: Detected incidents, root causes, remediation
 - Present both alert AND incident information together for comprehensive analysis
 
+When to transfer to insights_expert:
+- User asks about Openshift Insights recommendations
+- User wants to know if cluster is configured correctly or in a supported way
+- User asks "are there any insights recommendations", "what does Openshift Insights say"
+- User asks about misconfigurations or best practice violations
+- User wants configuration validation and best practice guidance
+- Questions like "is my cluster configured correctly", "what recommendations do I have", "show me insights"
+
 When to use openshift_docs_expert tool:
 - User asks GENERIC "how do I..." questions about OpenShift/Kubernetes features or procedures
 - User asks "what is..." questions about OpenShift/Kubernetes concepts (not cluster state)
@@ -132,7 +144,7 @@ When to answer directly:
 - Asking clarifying questions about what they need
 - Simple routing explanations ("I'll check the cluster state for you", etc.)
 """,
-    sub_agents=[kubernetes_agent, metrics_agent, incident_detection_agent],
+    sub_agents=[kubernetes_agent, metrics_agent, incident_detection_agent, insights_agent],
     tools=[docs_tool],
 )
 
