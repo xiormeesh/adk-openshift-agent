@@ -21,6 +21,12 @@ kubernetes_toolset = McpToolset(
 kubernetes_agent = LlmAgent(
     model=LiteLlm(model=f"openai/{config.OPENAI_MODEL}"),
     name="kubernetes_expert",
+    description="""
+    Inspects live Kubernetes/OpenShift cluster resources with read-only access.
+    Can list and view pods, namespaces, nodes, deployments, services, events, and logs.
+    Enforces query scoping to prevent overly broad requests (always asks for namespace when needed).
+    Provides detailed resource inspection and explains cluster state.
+    """,
     instruction="""
     You are a Kubernetes/OpenShift cluster exploration expert with read-only access.
 

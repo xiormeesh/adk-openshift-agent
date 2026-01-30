@@ -5,9 +5,11 @@ This module loads configuration from environment variables (.env file).
 
 Required Environment Variables:
     OPENAI_API_KEY: Your OpenAI API key (required)
+    GOOGLE_API_KEY: Your Google API key for Gemini and search (required)
 
 Optional Environment Variables:
-    OPENAI_MODEL: OpenAI model to use (default: gpt-4-turbo-preview)
+    OPENAI_MODEL: OpenAI model to use (default: gpt-5-nano)
+    GEMINI_MODEL: Gemini model to use (default: gemini-2.5-flash)
     BACKEND_HOST: Server host (default: localhost)
     BACKEND_PORT: Server port (default: 8000)
     CORS_ORIGINS: Comma-separated list of allowed origins (default: http://localhost:3000,http://localhost:8080)
@@ -15,7 +17,9 @@ Optional Environment Variables:
 
 Example .env file:
     OPENAI_API_KEY=sk-...
-    OPENAI_MODEL=gpt-4-turbo-preview
+    GOOGLE_API_KEY=...
+    OPENAI_MODEL=gpt-5-nano
+    GEMINI_MODEL=gemini-2.5-flash
     BACKEND_HOST=localhost
     BACKEND_PORT=8000
     CORS_ORIGINS=http://localhost:3000,http://localhost:8080
@@ -34,7 +38,11 @@ class Config:
 
     # OpenAI Configuration
     OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
-    OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4-turbo-preview")
+    OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-5-nano")
+
+    # Google/Gemini Configuration
+    GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY", "")
+    GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
 
     # Server Configuration
     HOST = os.getenv("BACKEND_HOST", "localhost")
@@ -59,13 +67,15 @@ class Config:
         Validate required configuration.
 
         Raises:
-            ValueError: If OPENAI_API_KEY is not set
+            ValueError: If OPENAI_API_KEY or GOOGLE_API_KEY is not set
 
         Returns:
             bool: True if validation passes
         """
         if not cls.OPENAI_API_KEY:
             raise ValueError("OPENAI_API_KEY environment variable is required")
+        if not cls.GOOGLE_API_KEY:
+            raise ValueError("GOOGLE_API_KEY environment variable is required")
         return True
 
 

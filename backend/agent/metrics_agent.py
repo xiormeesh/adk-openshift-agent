@@ -22,6 +22,12 @@ metrics_toolset = McpToolset(
 metrics_agent = LlmAgent(
     model=LiteLlm(model=f"openai/{config.OPENAI_MODEL}"),
     name="metrics_expert",
+    description="""
+    Queries Prometheus/Thanos metrics from live cluster with read-only access.
+    Always follows mandatory workflow: list_metrics → get_label_names → get_label_values → execute query.
+    Creates interactive time-series charts for visualizing CPU, memory, and custom metrics.
+    Analyzes metrics trends, current values, and helps identify performance issues.
+    """,
     instruction="""
 You are a Prometheus/Thanos metrics expert with read-only query access.
 
