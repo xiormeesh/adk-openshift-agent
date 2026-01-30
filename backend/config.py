@@ -14,6 +14,7 @@ Optional Environment Variables:
     BACKEND_PORT: Server port (default: 8000)
     CORS_ORIGINS: Comma-separated list of allowed origins (default: http://localhost:3000,http://localhost:8080)
     KUBECONFIG: Path to kubeconfig file (default: ~/.kube/config)
+    OPENSHIFT_USER_TOKEN: OpenShift user token for incident detection MCP (optional, for demo purposes)
 
 Example .env file:
     OPENAI_API_KEY=sk-...
@@ -23,6 +24,7 @@ Example .env file:
     BACKEND_HOST=localhost
     BACKEND_PORT=8000
     CORS_ORIGINS=http://localhost:3000,http://localhost:8080
+    OPENSHIFT_USER_TOKEN=sha256~...
 """
 
 import os
@@ -53,6 +55,7 @@ class Config:
 
     # MCP Server Configuration
     KUBECONFIG = os.getenv("KUBECONFIG", str(Path.home() / ".kube" / "config"))
+    OPENSHIFT_USER_TOKEN = os.getenv("OPENSHIFT_USER_TOKEN", "")
 
     # Agent Configuration
     AGENT_NAME = "openshift_assistant"
