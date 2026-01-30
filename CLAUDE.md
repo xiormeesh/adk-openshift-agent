@@ -118,7 +118,14 @@ When making ANY frontend changes:
 
 See `PLANNER.md` for phase definitions.
 
-**Current Phase:** Phase 2 (CopilotKit frontend integration)
+**Current Phase:** Phase 5 Complete (obs-mcp integration with Prometheus graphing)
+
+**Completed Phases:**
+- ✅ Phase 1: Backend ADK agent foundation
+- ✅ Phase 2: CopilotKit frontend integration
+- ✅ Phase 3: PatternFly UI integration
+- ✅ Phase 4: Kubernetes MCP integration
+- ✅ Phase 5: Observability MCP integration with time-series graphing
 
 **Before moving to next phase:**
 - User must verify current phase works
@@ -198,28 +205,25 @@ const runtime = new CopilotRuntime({
 - Agent name must match in backend and frontend
 - HttpAgent points to backend **root** URL
 
-### MCP Integration (Phase 3+)
-- Kubernetes MCP: localhost:8001 (when enabled)
-- Observability MCP: localhost:8002 (future)
-- Currently commented out in `agent/agent.py` - uncomment when Phase 3 starts
+### MCP Integration (Phase 4+)
+- ✅ Kubernetes MCP: localhost:8001 (active)
+- ✅ Observability MCP: localhost:8002 (active)
+- Multi-agent architecture with specialized agents for each domain
 
 ### Architecture
 ```
-Frontend (localhost:8080)
+Frontend (observability-assistant-ui :3000 or CopilotKit :8080)
   ↓
-CopilotKit
+AG-UI Protocol (SSE streaming)
   ↓
-/api/copilotkit (Next.js route)
+Backend FastAPI (:8000)
   ↓
-HttpAgent (@ag-ui/client)
+Router Agent (ADK)
+  ├─→ Kubernetes Agent → kubernetes-mcp-server (:8001) → Cluster API
+  └─→ Metrics Agent → obs-mcp-server (:8002) → Prometheus/Thanos
+       └─→ graph_timeseries_data (custom tool, uses httpx)
   ↓
-AG-UI Protocol
-  ↓
-add_adk_fastapi_endpoint (backend:8000)
-  ↓
-root_agent (ADK)
-  ↓
-OpenAI
+OpenAI GPT-4
 ```
 
 ## Code Quality Standards

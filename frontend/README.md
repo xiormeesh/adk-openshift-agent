@@ -1,4 +1,6 @@
-# ADK OpenShift Agent - Frontend
+# ADK OpenShift Agent - Frontend (CopilotKit)
+
+> **Note:** This is a development/reference frontend. For production use, see `source/observability-assistant-ui` (PatternFly UI).
 
 Next.js frontend with CopilotKit providing a chat interface for the AI assistant.
 
@@ -134,6 +136,14 @@ The agent name `"openshift_assistant"` must match the backend agent name in `bac
 - CopilotChat full-page interface (not popup)
 - Basic Q&A with OpenAI
 - AG-UI protocol integration
+- Kubernetes cluster operations
+- Prometheus metrics queries
+
+**Note:** This frontend lacks advanced features present in observability-assistant-ui:
+- ❌ No Prometheus chart visualization
+- ❌ No tool call visualization with expandable details
+- ❌ No demo mode
+- ✅ Good for testing basic agent functionality
 
 ## How It Works
 

@@ -5,13 +5,21 @@ FastAPI backend using Google's Agent Development Kit (ADK) to provide AI-powered
 ## Architecture
 
 ```
-Frontend (CopilotKit) -> Next.js API Route (/api/copilotkit)
-                      -> HttpAgent (@ag-ui/client)
-                      -> AG-UI Protocol
-                      -> Backend (add_adk_fastapi_endpoint)
-                      -> ADK Agent
-                      -> OpenAI (via LiteLLM)
-                      -> [Future: Kubernetes MCP Tools]
+Frontend (observability-assistant-ui or CopilotKit)
+  ↓
+AG-UI Protocol (SSE streaming)
+  ↓
+Backend FastAPI (:8000) - add_adk_fastapi_endpoint
+  ↓
+Router Agent (root_agent)
+  ├─→ Kubernetes Agent (kubernetes_expert)
+  │    └─→ kubernetes-mcp-server (:8001) → Cluster API
+  │
+  └─→ Metrics Agent (metrics_expert)
+       ├─→ obs-mcp-server (:8002) → Prometheus/Thanos
+       └─→ graph_timeseries_data (custom tool for charting)
+  ↓
+OpenAI GPT-4 (via LiteLLM)
 ```
 
 ## Quick Start
@@ -97,11 +105,16 @@ The agent is designed to work with CopilotKit frontend:
 ```
 backend/
 ├── agent/
-│   └── agent.py     # ADK agent configuration with root_agent
-├── main.py          # FastAPI server with AG-UI integration
-├── config.py        # Configuration from environment variables
-├── pyproject.toml   # Python dependencies and Poetry config
-└── .env            # Environment variables (not in git)
+│   ├── agent.py              # Router agent (root_agent)
+│   ├── kubernetes_agent.py   # Kubernetes cluster operations
+│   ├── metrics_agent.py      # Prometheus/Thanos metrics queries
+│   └── tools/
+│       ├── graph_timeseries.py   # Custom tool for time-series charting
+│       └── __init__.py
+├── main.py                   # FastAPI server with AG-UI integration
+├── config.py                 # Configuration from environment variables
+├── pyproject.toml            # Python dependencies and Poetry config
+└── .env                     # Environment variables (not in git)
 ```
 
 ## Key Files
@@ -145,13 +158,13 @@ Loads configuration from .env file and validates required settings.
 
 ✅ **Working:**
 - FastAPI server with AG-UI protocol
-- ADK + OpenAI integration via LiteLLM
-- CopilotKit frontend integration
-- Basic Q&A about Kubernetes/OpenShift
-
-❌ **Not Yet Working:**
-- Kubernetes MCP tools (requires npx to be installed)
-- Direct cluster interaction
+- ADK multi-agent architecture (router → specialized agents)
+- Kubernetes MCP integration (kubernetes-mcp-server :8001)
+- Observability MCP integration (obs-mcp-server :8002)
+- Prometheus metrics querying with natural language
+- Interactive time-series charts with Victory.js
+- PatternFly UI (primary) and CopilotKit (reference) frontends
+- Direct cluster interaction and metrics visualization
 
 ## How It Works
 
@@ -191,21 +204,30 @@ That's it! No manual endpoints, minimal configuration code.
 4. **CORS must allow frontend origin** - Set to http://localhost:8080
 5. **Minimal configuration** - `add_adk_fastapi_endpoint()` handles all protocol details
 
-## Enabling Kubernetes MCP Tools
+## Agent Architecture
 
-To enable direct cluster interaction:
+The backend uses a **multi-agent pattern** with specialized agents for different domains:
 
-1. Verify npx is installed (comes with Node.js 24):
-```bash
-which npx
-```
+### Router Agent (`agent/agent.py`)
+- Entry point for all user queries
+- Analyzes intent and delegates to appropriate specialized agent
+- Uses `transfer_to_agent` to route requests
 
-2. Uncomment in `agent/agent.py`:
-   - Lines 33-35: MCP imports
-   - Lines 41-54: kubernetes_toolset configuration
-   - Line 78: tools=[kubernetes_toolset]
+### Kubernetes Agent (`agent/kubernetes_agent.py`)
+- Handles cluster operations (pods, logs, deployments, etc.)
+- Connects to kubernetes-mcp-server on port 8001
+- READ-ONLY access to cluster resources
 
-3. Restart server - MCP server will connect via stdio
+### Metrics Agent (`agent/metrics_agent.py`)
+- Handles Prometheus/Thanos metrics queries
+- Connects to obs-mcp-server on port 8002
+- Custom `graph_timeseries_data` tool for charting
+- Follows MANDATORY workflow: list_metrics → get_label_names → get_label_values → query
+
+### Custom Tools (`agent/tools/`)
+- `graph_timeseries_data`: Wraps obs-mcp's `execute_range_query` for frontend visualization
+- Uses `httpx` for HTTP requests to MCP server
+- Returns Prometheus matrix data formatted for Victory.js charts
 
 ## Dependencies
 
@@ -213,10 +235,12 @@ Key Python packages (managed by Poetry):
 
 - `fastapi` - Web framework
 - `uvicorn` - ASGI server
-- `google-adk` - Agent Development Kit
+- `google-adk` - Agent Development Kit with MCP support
 - `ag-ui-adk` - AG-UI protocol server for ADK
 - `litellm` - OpenAI adapter for ADK
 - `openai` - OpenAI SDK
+- `httpx` - HTTP client for MCP server communication
+- `aiohttp` - Async HTTP (alternative, httpx preferred)
 - `pydantic` - Data validation
 - `python-dotenv` - Environment variables
 

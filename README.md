@@ -4,19 +4,26 @@ An AI-powered chatbot for managing Kubernetes/OpenShift clusters using natural l
 
 ## Architecture
 
-- **Backend**: Python ADK agent with OpenAI GPT integration
+- **Backend**: Python ADK with multi-agent architecture
+  - Router agent delegates to specialized agents
+  - Kubernetes agent for cluster operations
+  - Metrics agent for Prometheus/Thanos queries
 - **Frontends**:
   - PatternFly UI (port 3000) - Production-ready OpenShift-aligned interface
   - CopilotKit (port 8080) - Development/reference interface
-- **MCP Server**: kubernetes-mcp-server (standalone Node.js service) for cluster operations
+- **MCP Servers**:
+  - kubernetes-mcp-server (port 8001) - Cluster operations
+  - obs-mcp-server (port 8002) - Observability data (Prometheus/Thanos)
 - **Protocol**: AG-UI for real-time agent-UI communication
 
 ## Features
 
-- View cluster resources (pods, deployments, services, namespaces)
-- Stream and view pod logs
-- Troubleshoot cluster issues with AI assistance
-- Natural language interface for cluster management
+- ✅ View cluster resources (pods, deployments, services, namespaces)
+- ✅ Stream and view pod logs
+- ✅ Query Prometheus metrics with natural language
+- ✅ Interactive time-series charts for CPU, memory, and custom metrics
+- ✅ Troubleshoot cluster issues with AI assistance
+- ✅ Natural language interface for cluster management
 
 ## Prerequisites
 
@@ -64,15 +71,18 @@ Runs on http://localhost:8080
 
 ### MCP Server Setup
 
-The kubernetes-mcp-server is a standalone Node.js service:
+Two MCP servers are required:
 
+**Kubernetes MCP Server (port 8001)**:
 ```bash
 npx kubernetes-mcp-server@latest --port 8001 --kubeconfig ~/.kube/config
 ```
 
-or
+**Observability MCP Server (port 8002)**:
 ```bash
-npx kubernetes-mcp-server@latest --port 8001 --kubeconfig /var/lib/miniagent/kubeconfig
+# Requires Prometheus/Thanos endpoint configuration
+cd source/obs-mcp
+go run ./cmd/obs-mcp/ --listen 127.0.0.1:8002 --auth-mode kubeconfig --metrics-backend prometheus --insecure
 ```
 
 See [docs/MCP_SERVER.md](docs/MCP_SERVER.md) for detailed instructions.
@@ -80,10 +90,11 @@ See [docs/MCP_SERVER.md](docs/MCP_SERVER.md) for detailed instructions.
 
 ### Running All Services
 
-You need to run three services:
-1. **Terminal 1**: MCP Server (`npx kubernetes-mcp-server@latest --port 8080 --kubeconfig ~/.kube/config`)
-2. **Terminal 2**: Backend (`cd backend && poetry run dev`)
-3. **Terminal 3**: Frontend (`cd frontend && npm run dev`)
+You need to run four services:
+1. Backend (`cd backend && poetry run dev`)
+2. Frontend (`cd source/observability-assistant-ui && make dev`)
+3. Kubernetes MCP (`npx kubernetes-mcp-server@latest --port 8001 --kubeconfig /var/lib/miniagent/kubeconfig`)
+4. Observability MCP (`cd source/obs-mcp && go run ./cmd/obs-mcp/ --listen 127.0.0.1:8002 --auth-mode kubeconfig --metrics-backend prometheus --insecure`)
 
 ## Frontend Comparison
 

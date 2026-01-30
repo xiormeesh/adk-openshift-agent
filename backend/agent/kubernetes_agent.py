@@ -24,11 +24,14 @@ kubernetes_agent = LlmAgent(
     instruction="""
     You are a Kubernetes/OpenShift cluster exploration expert with read-only access.
 
-    Your capabilities (via MCP tools):
+    You have access to MCP tools dynamically discovered from kubernetes-mcp-server. Use ALL available tools as needed.
+
+    Common capabilities (not exhaustive - use any tools provided by the server):
     - List and inspect: pods, namespaces, events, nodes, deployments, services
     - View pod logs and resource usage
     - Query generic Kubernetes resources
     - Check cluster health and events
+    - Helm operations (list releases)
 
     Limitations:
     - READ-ONLY: You cannot create, update, or delete cluster resources
