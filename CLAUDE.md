@@ -1,389 +1,365 @@
-# Project Instructions for Claude
+# CLAUDE.md
 
-## Project Goal
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-An agentic chatbot to answer questions about OpenShift and help troubleshoot an OpenShift cluster connecting to its observability data (metrics, alerts, logs, traces, events) as well as provide information and evaluation of the cluster's health status.
+## Project Overview
+
+**Scruffy - The Cluster Janitor**: An AI-powered assistant for managing and troubleshooting Kubernetes/OpenShift clusters using natural language.
+
+Built with Google's Agent Development Kit (ADK) using a multi-agent architecture where a router agent delegates queries to 5 specialized agents, each with its own expertise and MCP (Model Context Protocol) server connections.
+
+This is a **proof of concept** focused on readability and simplicity over production robustness.
+
+## Commands
+
+### Backend (Python + Poetry)
+
+```bash
+# Setup
+cd backend
+poetry install
+
+# Development server (auto-reload, port 8000)
+poetry run dev
+
+# Health check
+curl http://localhost:8000/health
+
+# Agent discovery (AG-UI protocol)
+curl http://localhost:8000/api/chat/info
+```
+
+### Frontend - PatternFly UI (Primary, Production)
+
+```bash
+cd source/observability-assistant-ui
+make install
+make dev  # Port 3000
+```
+
+### Frontend - CopilotKit (Development/Reference)
+
+```bash
+cd frontend
+npm install
+npm run dev  # Port 8080
+```
+
+### MCP Servers (External, Required)
+
+These run outside this repo and must be started separately:
+
+```bash
+# Kubernetes MCP (port 8001)
+npx kubernetes-mcp-server@latest --port 8001 --kubeconfig ~/.kube/config
+
+# Observability MCP (port 8002)
+cd source/obs-mcp
+go run ./cmd/obs-mcp/ --listen 127.0.0.1:8002 --auth-mode kubeconfig --metrics-backend prometheus --insecure
+
+# Incident Detection MCP (port 8003)
+kubectl port-forward -n openshift-cluster-observability-operator svc/cluster-health-mcp-server 8003:8085
+
+# Insights MCP (port 8004)
+kubectl port-forward -n insights-results-mcp svc/insights-results-mcp-server 8004:5000
+```
+
+### Testing
+
+```bash
+# Full stack integration test
+# Terminal 1: cd backend && poetry run dev
+# Terminal 2: cd source/observability-assistant-ui && make dev
+# Terminal 3-6: Start each MCP server
+# Browser: http://localhost:3000
+```
+
+## Architecture
+
+### Multi-Agent System
+
+```
+Frontend (PatternFly :3000 or CopilotKit :8080)
+    ↓
+AG-UI Protocol (SSE streaming at /api/chat)
+    ↓
+Backend FastAPI (:8000)
+    ↓
+Router Agent (root_agent in agent/agent.py)
+    ├─→ Kubernetes Agent → kubernetes-mcp (:8001)
+    ├─→ Metrics Agent → obs-mcp (:8002) + graph_timeseries_data tool
+    ├─→ Incident Detection Agent → cluster-health-mcp (:8003)
+    ├─→ Insights Agent → insights-results-mcp (:8004)
+    └─→ OpenShift Docs Agent → Google Search (Gemini)
+        ↓
+    OpenAI GPT-4 (main agents) / Gemini (docs agent)
+```
+
+### Agent Files
+
+All agents in `backend/agent/`:
+
+1. **`agent.py`**: Router agent (`root_agent`) - orchestrates delegation
+   - Uses `sub_agents` parameter for event propagation to frontend
+   - Wraps docs agent as `AgentTool` to isolate google_search from function calling
+   - Agent name: `openshift_router` (but exposed as `openshift_assistant`)
+
+2. **`kubernetes_agent.py`**: Cluster resources (pods, logs, events)
+   - Uses `McpToolset` connected to kubernetes-mcp-server (:8001)
+   - Enforces query scoping (prevents overly broad queries)
+
+3. **`metrics_agent.py`**: Prometheus/Thanos metrics
+   - Uses `McpToolset` connected to obs-mcp-server (:8002)
+   - Custom `graph_timeseries_data` tool for charting (uses httpx)
+   - MANDATORY workflow: list_metrics → get_label_names → get_label_values → query
+
+4. **`incident_detection_agent.py`**: Cluster health incidents
+   - Uses `McpToolset` connected to cluster-health-mcp (:8003)
+   - Requires Bearer token auth: `kubernetes-authorization: Bearer {token}`
+
+5. **`insights_agent.py`**: Red Hat Insights recommendations
+   - Uses `McpToolset` connected to insights-results-mcp (:8004)
+   - No authentication required
+
+6. **`openshift_docs_agent.py`**: Official OpenShift 4.20 docs search
+   - Uses native Gemini model (not LiteLLM) with `google_search` tool
+   - Wrapped as `AgentTool` in router to avoid function calling conflicts
+   - ALWAYS uses `site:docs.redhat.com/en/documentation/openshift_container_platform/4.20`
+
+### Key Integration Points
+
+**Backend (`main.py`):**
+```python
+from ag_ui_adk import ADKAgent, add_adk_fastapi_endpoint
+
+adk_agent = ADKAgent(
+    adk_agent=root_agent,
+    app_name="openshift_assistant",  # Must match frontend
+    user_id="default_user",
+    session_timeout_seconds=3600,
+    use_in_memory_services=True
+)
+
+add_adk_fastapi_endpoint(app, adk_agent, path="/api/chat")  # Auto-generates endpoints
+```
+
+**Frontend (CopilotKit `route.ts`):**
+```typescript
+const runtime = new CopilotRuntime({
+  agents: {
+    openshift_assistant: new HttpAgent({ url: `${BACKEND_URL}/api/chat` })
+  }
+});
+```
+
+**Agent name must match:** `openshift_assistant` in both backend config and frontend.
+
+### Configuration (`backend/config.py`)
+
+Required environment variables in `backend/.env`:
+- `OPENAI_API_KEY` - For main agents (GPT-4)
+- `GOOGLE_API_KEY` - For docs agent (Gemini + google_search)
+
+Optional:
+- `OPENAI_MODEL` - Default: gpt-5-nano
+- `GEMINI_MODEL` - Default: gemini-2.5-flash
+- `OPENSHIFT_USER_TOKEN` - For incident detection MCP auth (Bearer token)
+- `CORS_ORIGINS` - Default: http://localhost:3000,http://localhost:8080
+
+### Sub-Agents Pattern (Current)
+
+Router uses `sub_agents` parameter instead of `AgentTool` for better event propagation to frontend:
+
+```python
+root_agent = LlmAgent(
+    sub_agents=[kubernetes_agent, metrics_agent, incident_detection_agent, insights_agent],
+    tools=[docs_tool],  # Docs agent wrapped as AgentTool due to google_search constraints
+)
+```
+
+**Why sub_agents?**
+- Shares `InvocationContext` between router and sub-agents
+- Enables frontend to see sub-agent tool calls in real-time
+- TODO: Will switch back to `AgentTool` once ADK PR #3991 merges (adds event streaming to AgentTool)
+
+**Why docs agent is AgentTool?**
+- `google_search` tool cannot work in `sub_agents` due to function calling conflicts
+- Wrapping as `AgentTool` isolates it from function calling
+
+### Custom Tools (`backend/agent/tools/`)
+
+**`graph_timeseries.py`**:
+- Wraps obs-mcp's `execute_range_query` for frontend visualization
+- Uses `httpx` to call obs-mcp HTTP endpoint directly
+- Returns Prometheus matrix data formatted for Victory.js charts
+- Exposed to metrics agent via tools list
 
 ## Critical Development Principles
 
-### 1. Minimal Code Philosophy
+### Minimal Code Philosophy
 
 **This is a proof of concept that will be read frequently.**
 
-- ✅ **ONLY implement features explicitly requested**
-- ❌ **DO NOT add features "just in case"**
-- ❌ **DO NOT future-proof the code**
-- ❌ **DO NOT add abstractions for potential future use**
-- ✅ **Keep the codebase as small and readable as possible**
+- ✅ ONLY implement features explicitly requested
+- ❌ DO NOT add features "just in case"
+- ❌ DO NOT future-proof the code
+- ✅ Keep the codebase as small and readable as possible
 
-### 2. Strict Change Protocol
+### Strict Change Protocol
 
-When the user requests a change:
+1. Do EXACTLY what is requested - nothing more
+2. Do not add: extra error handling, configuration options, helper functions, comments about future uses
+3. Ask before adding anything beyond the request
 
-1. **Do EXACTLY what is requested - nothing more**
-2. **Do not add:**
-   - Extra error handling for edge cases not mentioned
-   - Additional configuration options "for flexibility"
-   - Helper functions for one-time operations
-   - Comments explaining potential future uses
-   - Type annotations to code that doesn't have them
-   - Documentation to code you didn't change
+### Agent Instructions
 
-3. **Ask before adding anything beyond the request**
+All agent instructions should be:
+- Short, precise, and actionable (no verbose explanations)
+- Instructions may include critical behavioral rules (e.g., metrics agent's MANDATORY workflow)
+- Router distinguishes: LIVE CLUSTER INVESTIGATION vs DOCUMENTATION SEARCH
 
-### 3. Test Before Adding Complexity
+### Frontend Development
 
-**MANDATORY workflow for every phase:**
+**IMPORTANT: The user has NO frontend development experience.**
+
+When making frontend changes:
+1. Explain in detail BEFORE making changes (what, why, alternatives)
+2. After making changes, explain what was changed and how to verify
+3. Use simple language - avoid jargon without explanation
+
+### Testing Before Complexity
 
 1. Implement the requested feature
 2. Test that it works
 3. Document what was added
 4. Get user confirmation before moving to next feature
 
-**Do not:**
-- Implement multiple features at once
-- Move to next phase without user verification
-- Add "related improvements" while implementing a feature
-
-### 4. Documentation Standards
-
-- Document **what exists**, not what could exist
-- Keep README files focused on **current functionality**
-- Remove outdated documentation immediately
-- Mark non-working features clearly (✅ Working / ❌ Not Working)
-
-### 5. Frontend Development
-
-**IMPORTANT: The user has NO frontend development experience.**
-
-When making ANY frontend changes:
-
-1. **Explain in detail before making changes:**
-   - What you're changing and why
-   - Why this approach is the best choice
-   - What alternatives exist and why you're not using them
-   - What the user should expect to see
-
-2. **After making changes, explain:**
-   - What files were changed
-   - What each change does
-   - How to verify it works
-
-3. **Use simple language:**
-   - Avoid frontend jargon without explanation
-   - Explain React/Next.js concepts when needed
-   - Don't assume knowledge of npm, components, hooks, etc.
-
-4. **Think extra carefully:**
-   - Is this change necessary for the requested feature?
-   - Is this the simplest way to achieve it?
-   - Could this confuse someone unfamiliar with frontend development?
-
-**Example of good explanation:**
-> "I'm removing the `components/` folder because it's empty and Next.js doesn't require it. Next.js only needs the `app/` folder for pages. We can recreate `components/` later if we need to share code between pages."
-
-**Example of bad explanation:**
-> "Removing unused components directory."
-
-## Technical Documentation
-
-**CRITICAL:** Before making changes to the stack integration, read `TECH_STACK.md`.
-
-`TECH_STACK.md` contains comprehensive documentation about:
-- How ADK (Agent Development Kit) works
-- How AG-UI protocol connects frontends to ADK agents
-- How CopilotKit integrates with ADK via AG-UI
-- Complete integration patterns and troubleshooting
-
-**Always consult TECH_STACK.md when:**
-- Working on frontend ↔ backend integration
-- Debugging "agent not found" errors
-- Adding new agents or tools
-- User asks "how does X work?"
-
-## Project Structure
-
-### Backend (Python)
-- **Files:** `main.py`, `agent/agent.py`, `config.py`
-- **Key endpoints:** `/` (health), `/health`, AG-UI protocol endpoints (auto-generated)
-- **Stack:** FastAPI + ADK + AG-UI + LiteLLM + OpenAI
-- **Port:** 8000
-
-### Frontend (Next.js)
-- **Files:** `app/page.tsx`, `app/api/copilotkit/route.ts`
-- **Stack:** Next.js + CopilotKit + AG-UI client
-- **Port:** 8080
-
-## Current Phase Status
-
-See `PLANNER.md` for phase definitions.
-
-**Current Phase:** Phase 5 Complete (obs-mcp integration with Prometheus graphing)
-
-**Completed Phases:**
-- ✅ Phase 1: Backend ADK agent foundation
-- ✅ Phase 2: CopilotKit frontend integration
-- ✅ Phase 3: PatternFly UI integration
-- ✅ Phase 4: Kubernetes MCP integration
-- ✅ Phase 5: Observability MCP integration with time-series graphing
-
-**Before moving to next phase:**
-- User must verify current phase works
-- All acceptance criteria must pass
-- Documentation must be updated
-
-## Development Workflow
-
-### When User Requests a Feature
-
-```
-1. Read the request carefully
-2. Confirm understanding (ask questions if unclear)
-3. Implement ONLY what was requested
-4. Test the implementation
-5. Update documentation if relevant
-6. Report completion with test results
-7. Wait for user verification before continuing
-```
-
-### When User Reports a Bug
-
-```
-1. Reproduce the issue
-2. Identify root cause
-3. Fix ONLY the bug (no "while I'm here" fixes)
-4. Test the fix
-5. Report what was fixed
-```
-
-### What NOT to Do
-
-❌ "I also noticed X could be improved, so I fixed that too"
-❌ "I added error handling for edge case Y just in case"
-❌ "I refactored Z to make it more maintainable"
-❌ "I added comments explaining future extensibility"
-❌ "I created a helper function for this 3-line operation"
-
-✅ "I implemented exactly what you requested"
-✅ "Would you like me to also handle X?"
-✅ "I noticed Y - should I address that separately?"
-
-## Technical Context
-
-**See TECH_STACK.md for complete documentation.** Below is a quick reference.
-
-### ADK + AG-UI Pattern (Current)
-
-**Backend:**
-```python
-from ag_ui_adk import add_adk_fastapi_endpoint
-from google.adk.agents import LlmAgent
-
-root_agent = LlmAgent(
-    model=LiteLlm(model="openai/gpt-4-turbo-preview"),
-    name="my_agent",
-    instruction="..."
-)
-
-add_adk_fastapi_endpoint(app, root_agent, path="/")  # That's it!
-```
-
-**Frontend:**
-```typescript
-import { HttpAgent } from "@ag-ui/client";
-
-const runtime = new CopilotRuntime({
-  agents: {
-    my_agent: new HttpAgent({ url: "http://localhost:8000/" })
-  }
-});
-```
-
-**Key points:**
-- `add_adk_fastapi_endpoint()` auto-generates all necessary endpoints
-- No manual session management needed
-- Agent name must match in backend and frontend
-- HttpAgent points to backend **root** URL
-
-### MCP Integration (Phase 4+)
-- ✅ Kubernetes MCP: localhost:8001 (active)
-- ✅ Observability MCP: localhost:8002 (active)
-- Multi-agent architecture with specialized agents for each domain
-
-### Architecture
-```
-Frontend (observability-assistant-ui :3000 or CopilotKit :8080)
-  ↓
-AG-UI Protocol (SSE streaming)
-  ↓
-Backend FastAPI (:8000)
-  ↓
-Router Agent (ADK)
-  ├─→ Kubernetes Agent → kubernetes-mcp-server (:8001) → Cluster API
-  └─→ Metrics Agent → obs-mcp-server (:8002) → Prometheus/Thanos
-       └─→ graph_timeseries_data (custom tool, uses httpx)
-  ↓
-OpenAI GPT-4
-```
-
-## Code Quality Standards
-
-### Python
-- Clear variable names
-- Docstrings only where adding real value
-- No "just in case" imports
-- No unused functions
-- Type hints where they clarify, not everywhere
-
-### TypeScript/React
-- Functional components
-- Minimal abstractions
-- Clear prop types
-- No premature optimization
-
-### General
-- If you're about to add a comment explaining complexity, simplify the code instead
-- If you're creating a helper for one use, inline it
-- If you're adding configuration for "flexibility", remove it
-
-## Testing Expectations
-
-### After Each Change
-```bash
-# Backend health check
-curl http://localhost:8000/health
-
-# AG-UI info endpoint (auto-generated)
-curl http://localhost:8000/info
-
-# Full integration test
-# 1. Start backend: cd backend && poetry run dev
-# 2. Start frontend: cd frontend && npm run dev
-# 3. Open http://localhost:8080
-# 4. Test chat in popup
-```
-
-### Frontend Testing with Playwright MCP
-
-**Primary UI**: PatternFly frontend on http://localhost:3000
-
-When testing frontend functionality, use the Playwright MCP server to:
-- Navigate to http://localhost:3000 (production UI)
-- Send test queries to verify agent responses
-- Check tool call visualization (multi-agent delegation)
-- Verify AG-UI event streaming (RUN_STARTED, TOOL_CALL_*, TEXT_MESSAGE_*)
-
-**Why PatternFly UI is primary:**
-- Production-ready OpenShift-aligned interface
-- Advanced features (tool visualization, Prometheus charts, steps)
-- Main target for Phase 4+ testing
-- CopilotKit (port 8080) remains as development/reference
-
-See `PLAYWRIGHT.md` for detailed testing guide including:
-- UI elements and selectors
-- Test scenarios
-- Troubleshooting tips
-
-### Phase Completion
-- All acceptance criteria in PLANNER.md must pass
-- User must manually verify functionality
-- Documentation must reflect current state
+Do not: implement multiple features at once, move to next phase without verification, add "related improvements"
 
 ## Common Patterns
 
-### Reading Files
-- Read file before editing (required by tools)
-- Only edit what needs changing
-- Don't reformat code you didn't touch
+### Adding a New Agent
 
-### Adding Dependencies
-```bash
-# Backend
-poetry add package-name
+1. Create `backend/agent/new_agent.py`:
+```python
+from google.adk.agents import LlmAgent
+from google.adk.models.lite_llm import LiteLlm
+from google.adk.tools.mcp_tool import McpToolset
+from config import config
 
-# Frontend
-cd frontend && npm install package-name
+# MCP connection
+toolset = McpToolset(connection_params=StreamableHTTPConnectionParams(url="..."))
+
+# Agent definition
+new_agent = LlmAgent(
+    model=LiteLlm(model=f"openai/{config.OPENAI_MODEL}"),
+    name="new_expert",
+    description="...",  # Used by router for delegation
+    instruction="...",  # Agent's system prompt
+    tools=[toolset],
+)
 ```
+
+2. Import and add to router in `agent/agent.py`:
+```python
+from .new_agent import new_agent
+
+root_agent = LlmAgent(
+    sub_agents=[..., new_agent],  # Add to sub_agents list
+    tools=[docs_tool],
+)
+```
+
+3. Update router instruction to include new agent in routing logic
+
+### MCP Tool Integration
+
+MCP servers expose tools dynamically via HTTP:
+```python
+from google.adk.tools.mcp_tool import McpToolset
+from google.adk.tools.mcp_tool.mcp_session_manager import StreamableHTTPConnectionParams
+
+toolset = McpToolset(
+    connection_params=StreamableHTTPConnectionParams(
+        url="http://localhost:8001/mcp",
+        headers={"kubernetes-authorization": f"Bearer {token}"} if auth_required else {}
+    )
+)
+```
+
+Agent discovers and uses all tools provided by the MCP server automatically.
 
 ### Process Management
 
-When starting background processes (backend server, etc.):
+When starting background processes (use subshell for proper signal handling):
 
-**Start in subshell:**
 ```bash
+# Start
 ( poetry run dev > /tmp/backend.log 2>&1 ) &
 SUBSHELL_PID=$!
-echo "Started process, PID: $SUBSHELL_PID"
-```
 
-**Graceful shutdown (like CTRL+C):**
-```bash
-kill -INT $SUBSHELL_PID  # Send SIGINT (same as CTRL+C)
+# Graceful shutdown (SIGINT, like CTRL+C)
+kill -INT $SUBSHELL_PID
 sleep 2
 ps -p $SUBSHELL_PID 2>/dev/null || echo "Shutdown complete"
 ```
 
-**Why this pattern:**
-- Subshell groups the process and its children
-- `kill -INT` sends SIGINT (signal 2) for graceful shutdown
-- Allows cleanup: finish requests, flush logs, close connections
-- Same behavior as user pressing CTRL+C in terminal
-
-**Signals:**
+Signals:
 - `kill -INT` or `kill -2`: Graceful (like CTRL+C)
-- `kill` or `kill -15`: Graceful (SIGTERM, default)
-- `kill -9`: Forceful (no cleanup, use as last resort)
+- `kill -9`: Forceful (last resort, no cleanup)
 
-### Debugging
-1. Check backend logs: `tail -f /tmp/backend.log` or task output
+### Git Commits
+
+Only create commits when requested. Follow the git safety protocol in the existing CLAUDE.md.
+
+Critical:
+- ALWAYS create NEW commits
+- NEVER use `git commit --amend` unless explicitly requested
+- NEVER skip hooks (`--no-verify`)
+- Include Co-Authored-By line when committing
+
+## Technical References
+
+See also:
+- **TECH_STACK.md**: Complete ADK + AG-UI + MCP integration documentation
+- **PLANNER.md**: Phase definitions and acceptance criteria (if exists)
+- **PLAYWRIGHT.md**: Frontend testing guide with Playwright MCP
+
+## File Structure
+
+```
+backend/
+├── agent/
+│   ├── agent.py                      # Router agent
+│   ├── kubernetes_agent.py           # Cluster operations
+│   ├── metrics_agent.py              # Prometheus/Thanos
+│   ├── incident_detection_agent.py   # Health analysis
+│   ├── insights_agent.py             # Red Hat Insights
+│   ├── openshift_docs_agent.py       # Documentation search
+│   └── tools/
+│       └── graph_timeseries.py       # Custom charting tool
+├── main.py                           # FastAPI + AG-UI endpoint
+└── config.py                         # Environment configuration
+
+frontend/                             # Next.js + CopilotKit (development)
+├── app/
+│   ├── page.tsx                      # Main chat UI
+│   └── api/copilotkit/route.ts       # AG-UI client connection
+
+source/observability-assistant-ui/   # PatternFly UI (production)
+```
+
+## Debugging
+
+1. Check backend logs: `tail -f /tmp/backend.log` or check task output
 2. Check frontend console (user reports errors)
-3. Fix root cause, not symptoms
+3. Verify MCP servers are running on correct ports (8001-8004)
+4. Test AG-UI discovery: `curl http://localhost:8000/api/chat/info`
+5. Fix root cause, not symptoms
 
-## Remember
+## Golden Rule
 
-This is a **proof of concept**, not a production system:
-- Readability > Robustness
-- Simplicity > Scalability
-- Working > Perfect
-- Tested > Theoretical
-
-**Every line of code added increases maintenance burden.**
-**Every feature added increases complexity.**
-**Only add what's explicitly needed.**
-
-## Questions to Ask Yourself
-
-Before adding code:
-- ✓ Did the user explicitly request this?
-- ✓ Is this the simplest way to implement it?
-- ✓ Am I solving an actual problem or a potential problem?
-- ✓ Would removing this code break what was requested?
-
-If answer to last question is "no", don't add the code.
-
-## Communication Style
-
-- Be concise
-- Report what was done, not what could be done
-- Ask before adding extras
-- Confirm understanding before implementing
-- Test and show results
-
-## File Change Protocol
-
-**Before making changes:**
-1. Read current file state
-2. Understand what needs to change
-3. Change ONLY what's necessary
-4. Don't add/remove features not mentioned
-
-**Dead code removal:**
-- Only remove if explicitly requested
-- Or if it's clearly unused imports from a change you just made
-
-## Summary
-
-**Golden Rule:** If the user didn't ask for it, don't add it.
+**If the user didn't ask for it, don't add it.**
 
 The user values:
 1. Minimal, readable code
@@ -392,4 +368,4 @@ The user values:
 4. Clear documentation of current state
 5. Phased, verified development
 
-Honor these values in every interaction.
+This is a proof of concept: Readability > Robustness, Simplicity > Scalability, Working > Perfect.
