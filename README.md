@@ -1,138 +1,159 @@
-# ADK OpenShift Agent
+# Openshift Observability AI agents (aka Scruffy - The Cluster Janitor)
 
-An AI-powered chatbot for managing Kubernetes/OpenShift clusters using natural language.
+<img src="https://preview.redd.it/havent-watched-futurama-in-years-when-did-scruffy-become-a-v0-b2tw503tu6wa1.jpg?auto=webp&s=aef536616a09fc8875a1ebe66c0bfde176df2b1b" width="200" alt="Scruffy the janitor">
+
+*"Scruffy's gonna observe that cluster."*
+
+AI-powered assistant for exploring and troubleshooting Kubernetes/OpenShift clusters. Ask questions in natural language, Scruffy knows what's broken and how to fix it.
+
+Built with Google's Agent Development Kit (ADK) using a multi-agent architecture where specialized agents handle different aspects of cluster management.
+
+## What It Does
+
+Ask questions in plain English, get answers from your cluster:
+- **"What pods are in the openshift-monitoring namespace?"** → Kubernetes Agent lists pods
+- **"Show me CPU usage for the last hour"** → Metrics Agent queries Prometheus and creates interactive charts
+- **"Are there any incidents in my cluster?"** → Incident Detection Agent analyzes cluster health
+- **"What does Red Hat Insights recommend?"** → Insights Agent retrieves recommendations
+- **"How do I configure persistent volumes in OpenShift?"** → Docs Agent searches official documentation
 
 ## Architecture
 
-- **Backend**: Python ADK with multi-agent architecture
-  - Router agent delegates to specialized agents
-  - Kubernetes agent for cluster operations
-  - Metrics agent for Prometheus/Thanos queries
-- **Frontends**:
-  - PatternFly UI (port 3000) - Production-ready OpenShift-aligned interface
-  - CopilotKit (port 8080) - Development/reference interface
-- **MCP Servers**:
-  - kubernetes-mcp-server (port 8001) - Cluster operations
-  - obs-mcp-server (port 8002) - Observability data (Prometheus/Thanos)
-- **Protocol**: AG-UI for real-time agent-UI communication
+```
+Frontend (PatternFly or CopilotKit)
+    ↓
+AG-UI Protocol (/api/chat)
+    ↓
+Router Agent (orchestrator)
+    ├─→ Kubernetes Agent → kubernetes-mcp-server (:8001)
+    ├─→ Metrics Agent → obs-mcp-server (:8002)
+    ├─→ Incident Detection Agent → cluster-health-mcp (:8003)
+    ├─→ Insights Agent → insights-results-mcp (:8004)
+    └─→ OpenShift Docs Agent → Google Search
+```
 
-## Features
+### Agents
 
-- ✅ View cluster resources (pods, deployments, services, namespaces)
-- ✅ Stream and view pod logs
-- ✅ Query Prometheus metrics with natural language
-- ✅ Interactive time-series charts for CPU, memory, and custom metrics
-- ✅ Troubleshoot cluster issues with AI assistance
-- ✅ Natural language interface for cluster management
+**Router Agent**: Analyzes user queries and delegates to appropriate specialized agent
 
-## Prerequisites
+**Specialized Agents:**
+- **Kubernetes**: Cluster resources (pods, logs, deployments, services, events)
+- **Metrics**: Prometheus/Thanos queries with interactive time-series charts
+- **Incident Detection**: Cluster health analysis and root cause identification
+- **Insights**: Red Hat Insights recommendations and configuration validation
+- **OpenShift Docs**: Official OpenShift 4.20 documentation search
 
-- Python 3.10+
-- [Poetry](https://python-poetry.org/) - Python dependency management
-- Node.js 18+
-- Access to a Kubernetes or OpenShift cluster
-- OpenAI API key
+### MCP Servers
+
+Model Context Protocol servers provide read-only access to cluster data:
+- **Port 8001**: kubernetes-mcp-server - Kubernetes/OpenShift resources
+- **Port 8002**: obs-mcp-server - Prometheus/Thanos metrics
+- **Port 8003**: cluster-health-mcp-server - Incident detection
+- **Port 8004**: insights-results-mcp - Red Hat Insights
 
 ## Quick Start
 
-See [docs/QUICK_START.md](docs/QUICK_START.md) for 5-minute setup or [docs/SETUP.md](docs/SETUP.md) for detailed instructions.
+### Prerequisites
 
-### Backend Setup
+- Python 3.12, Poetry
+- Node.js 24
+- OpenAI API key, Google API key
+- Kubernetes/OpenShift cluster access
+
+Note: only backend and agents are in this repo, MCP servers need to be fetched from corresponding repos and set up to receive requests (no auth for PoC)
+
+### 1. Backend Setup
 
 ```bash
 cd backend
 poetry install
-poetry run dev
+poetry run dev  # Runs on :8000
 ```
 
-### Frontend Setup
+### 2. Frontend Setup
 
-**Option 1: PatternFly UI (Recommended for production)**
-
-The PatternFly frontend provides an OpenShift-aligned interface with advanced features:
-
+**Option A: PatternFly UI (Recommended)** - [observability-assistant-ui](https://github.com/falox/observability-assistant-ui)
 ```bash
-cd source/observability-assistant-ui
+cd /observability-assistant-ui
 make install
-make dev
+make dev  # Runs on :3000
 ```
 
-Runs on http://localhost:3000
-
-**Option 2: CopilotKit (Development/Reference)**
-
+**Option B: CopilotKit (Development)**
 ```bash
 cd frontend
 npm install
-npm run dev
+npm run dev  # Runs on :8080
 ```
 
-Runs on http://localhost:8080
+### 3. MCP Servers (Required)
 
-### MCP Server Setup
+**Kubernetes MCP Server (port 8001)** - [kubernetes-mcp-server](https://github.com/containers/kubernetes-mcp-server)
 
-Two MCP servers are required:
-
-**Kubernetes MCP Server (port 8001)**:
 ```bash
 npx kubernetes-mcp-server@latest --port 8001 --kubeconfig ~/.kube/config
 ```
 
-**Observability MCP Server (port 8002)**:
+**Observability MCP Server (port 8002)** - [obs-mcp](https://github.com/rhobs/obs-mcp)
+
 ```bash
-# Requires Prometheus/Thanos endpoint configuration
 cd source/obs-mcp
+oc login
 go run ./cmd/obs-mcp/ --listen 127.0.0.1:8002 --auth-mode kubeconfig --metrics-backend prometheus --insecure
 ```
 
-See [docs/MCP_SERVER.md](docs/MCP_SERVER.md) for detailed instructions.
+**Incident Detection MCP Server (port 8003)** - [cluster-health-analyzer](https://github.com/openshift/cluster-health-analyzer/tree/dev-preview) | [Setup guide](https://developers.redhat.com/articles/2025/10/09/integrate-incident-detection-openshift-lightspeed-mcp)
 
+```bash
+oc port-forward -n openshift-cluster-observability-operator svc/cluster-health-mcp-server 8003:8085
+```
 
-### Running All Services
+**Insights Results MCP Server (port 8004)** - [insights-results-mcp](https://github.com/RedHatInsights/insights-results-mcp)
 
-You need to run four services:
-1. Backend (`cd backend && poetry run dev`)
-2. Frontend (`cd source/observability-assistant-ui && make dev`)
-3. Kubernetes MCP (`npx kubernetes-mcp-server@latest --port 8001 --kubeconfig /var/lib/miniagent/kubeconfig`)
-4. Observability MCP (`cd source/obs-mcp && go run ./cmd/obs-mcp/ --listen 127.0.0.1:8002 --auth-mode kubeconfig --metrics-backend prometheus --insecure`)
+```bash
+oc port-forward -n insights-results-mcp svc/insights-results-mcp-server 8004:5000
+```
 
-## Frontend Comparison
+## Features
 
-| Feature | PatternFly UI | CopilotKit |
-|---------|--------------|------------|
-| **Port** | 3000 | 8080 |
-| **Technology** | React + Vite + PatternFly 6 | Next.js + CopilotKit |
-| **UI Framework** | PatternFly (OpenShift-aligned) | Material-like components |
-| **Features** | Prometheus charts, tool visualization, steps, markdown | Basic chat interface |
-| **Demo Mode** | Yes (switchable in UI) | No |
-| **Production Ready** | Yes | Development/Reference |
-| **AG-UI Integration** | Custom SSE implementation | @ag-ui/client library |
-
-Both frontends connect to the same backend at http://localhost:8000 using the AG-UI protocol.
+✅ Natural language cluster queries
+✅ Interactive Prometheus metrics charts
+✅ Pod logs streaming and viewing
+✅ Cluster health incident analysis
+✅ Red Hat Insights recommendations
+✅ Official OpenShift documentation search
+✅ Multi-agent orchestration with specialized expertise
+✅ Real-time SSE streaming responses
 
 ## Project Structure
 
 ```
 adk-openshift-agent/
-├── backend/                          # Python ADK agent
-├── frontend/                         # Next.js + CopilotKit UI (port 8080)
-├── source/
-│   └── observability-assistant-ui/  # PatternFly UI (port 3000)
-├── docs/                            # Documentation
-├── AG_UI_PROTOCOL.md               # AG-UI endpoint documentation
-├── PLAYWRIGHT.md                   # Frontend testing guide
-└── README.md
+├── backend/                          # Python ADK multi-agent system
+│   ├── agent/
+│   │   ├── agent.py                 # Router agent
+│   │   ├── kubernetes_agent.py      # Cluster operations
+│   │   ├── metrics_agent.py         # Prometheus/Thanos
+│   │   ├── incident_detection_agent.py  # Health analysis
+│   │   ├── insights_agent.py        # Red Hat Insights
+│   │   └── openshift_docs_agent.py  # Documentation search
+│   ├── main.py                       # FastAPI + AG-UI
+│   └── config.py
+├── frontend/                         # Next.js + CopilotKit (development)
 ```
 
-## Resources
+## Technology Stack
 
-### Documentation
-- [AG-UI Protocol Implementation](AG_UI_PROTOCOL.md) - Backend endpoint documentation
-- [Playwright Testing Guide](PLAYWRIGHT.md) - Frontend testing with Playwright MCP
+- **Backend**: Python 3.12, FastAPI, Google ADK, LiteLLM, AG-UI
+- **Frontend (PatternFly)**: React, Vite, PatternFly 6, Victory.js
+- **Frontend (CopilotKit)**: Next.js, CopilotKit, @ag-ui/client
+- **LLMs**: OpenAI GPT-4 (main agents), Google Gemini (docs search)
+- **Protocol**: AG-UI for agent-UI communication
 
-### External
+## External Resources
+
 - [Google ADK Documentation](https://google.github.io/adk-docs/)
 - [AG-UI Protocol](https://docs.ag-ui.com/)
 - [kubernetes-mcp-server](https://github.com/containers/kubernetes-mcp-server)
-- [CopilotKit](https://www.copilotkit.ai/)
 - [PatternFly Chatbot](https://www.patternfly.org/patternfly-ai/chatbot/overview/)
+- [CopilotKit](https://www.copilotkit.ai/)

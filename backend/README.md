@@ -1,359 +1,109 @@
-# ADK OpenShift Agent - Backend
+# Backend - ADK Multi-Agent System
 
-FastAPI backend using Google's Agent Development Kit (ADK) to provide AI-powered Kubernetes/OpenShift cluster management.
+FastAPI backend using Google's Agent Development Kit (ADK) with multi-agent architecture for OpenShift/Kubernetes cluster management.
+
+## Quick Start
+
+**Prerequisites:** Python 3.12, Poetry, OpenAI API key, Google API key
+
+```bash
+poetry install
+poetry run dev  # Runs on http://localhost:8000
+```
 
 ## Architecture
 
 ```
-Frontend (observability-assistant-ui or CopilotKit)
-  ↓
-AG-UI Protocol (SSE streaming)
-  ↓
-Backend FastAPI (:8000) - add_adk_fastapi_endpoint
-  ↓
-Router Agent (root_agent)
-  ├─→ Kubernetes Agent (kubernetes_expert)
-  │    └─→ kubernetes-mcp-server (:8001) → Cluster API
-  │
-  └─→ Metrics Agent (metrics_expert)
-       ├─→ obs-mcp-server (:8002) → Prometheus/Thanos
-       └─→ graph_timeseries_data (custom tool for charting)
-  ↓
-OpenAI GPT-4 (via LiteLLM)
+Frontend → AG-UI Protocol (/api/chat) → Router Agent (root_agent)
+                                            ├─→ Kubernetes Agent → kubernetes-mcp (:8001)
+                                            ├─→ Metrics Agent → obs-mcp (:8002)
+                                            ├─→ Incident Detection Agent → incident-mcp (:8003)
+                                            ├─→ Insights Agent → insights-mcp (:8004)
+                                            └─→ OpenShift Docs Agent → google_search
+                                                    ↓
+                                            OpenAI GPT-4 / Gemini
 ```
 
-## Quick Start
+## Agents
 
-### Prerequisites
+**Router Agent** (`agent/agent.py`): Orchestrates specialized agents based on query intent
 
-- Python 3.12
-- Poetry
-- OpenAI API key
-- Node.js 24 (for npx, when enabling MCP tools)
+**Specialized Agents:**
+- **Kubernetes Agent** (`kubernetes_agent.py`): Cluster resources (pods, logs, deployments, services)
+- **Metrics Agent** (`metrics_agent.py`): Prometheus/Thanos metrics queries with charting
+- **Incident Detection Agent** (`incident_detection_agent.py`): Cluster health incidents and root cause analysis
+- **Insights Agent** (`insights_agent.py`): Red Hat Insights recommendations and configuration validation
+- **OpenShift Docs Agent** (`openshift_docs_agent.py`): Official OpenShift 4.20 documentation search
 
-### Setup
+## Configuration
 
-1. Install dependencies:
-```bash
-poetry install
-```
-
-2. Create `.env` file:
+**Required `.env` variables:**
 ```bash
 OPENAI_API_KEY=sk-...
-OPENAI_MODEL=gpt-4-turbo-preview
-CORS_ORIGINS=http://localhost:8080
+GOOGLE_API_KEY=...
 ```
 
-3. Run development server:
+**Optional `.env` variables:**
 ```bash
-poetry run dev
-```
-
-Server runs on http://localhost:8000
-
-## Testing
-
-### Test AG-UI Agent Discovery
-
-```bash
-# Check if agent is exposed correctly
-curl http://localhost:8000/info
-```
-
-Expected response:
-```json
-{
-  "agents": ["openshift_assistant"],
-  ...
-}
-```
-
-### Test Health Endpoints
-
-```bash
-# Basic health check
-curl http://localhost:8000/
-
-# Detailed health check
-curl http://localhost:8000/health
-```
-
-### Test with ADK Web Interface
-
-```bash
-# Start ADK's built-in web UI (different from CopilotKit)
-cd backend
-poetry run adk web . --port 9999
-```
-
-Then open http://localhost:9999
-
-### Full Integration Test
-
-The agent is designed to work with CopilotKit frontend:
-
-1. Start backend: `poetry run dev` (runs on :8000)
-2. Start frontend: `cd ../frontend && npm run dev` (runs on :8080)
-3. Open http://localhost:8080
-4. Test chat in popup
-
-**Note:** Direct curl tests of the AG-UI POST endpoint are complex due to the protocol format. Use the frontend or ADK web interface for testing.
-
-## Project Structure
-
-```
-backend/
-├── agent/
-│   ├── agent.py              # Router agent (root_agent)
-│   ├── kubernetes_agent.py   # Kubernetes cluster operations
-│   ├── metrics_agent.py      # Prometheus/Thanos metrics queries
-│   └── tools/
-│       ├── graph_timeseries.py   # Custom tool for time-series charting
-│       └── __init__.py
-├── main.py                   # FastAPI server with AG-UI integration
-├── config.py                 # Configuration from environment variables
-├── pyproject.toml            # Python dependencies and Poetry config
-└── .env                     # Environment variables (not in git)
+OPENAI_MODEL=gpt-4-turbo-preview  # Default: gpt-5-nano
+GEMINI_MODEL=gemini-2.5-flash     # Default: gemini-2.5-flash
+CORS_ORIGINS=http://localhost:3000,http://localhost:8080
+OPENSHIFT_USER_TOKEN=sha256~...   # For incident detection MCP auth, temporary for PoC
+KUBECONFIG=~/.kube/config
 ```
 
 ## Key Files
 
-### main.py
+- **`main.py`**: FastAPI app with AG-UI integration (`add_adk_fastapi_endpoint`)
+- **`agent/agent.py`**: Router agent (`root_agent`) with sub-agent coordination
+- **`agent/*_agent.py`**: Specialized agents with MCP tool connections
+- **`agent/tools/graph_timeseries.py`**: Custom tool for time-series chart data
+- **`config.py`**: Environment variable configuration
 
-FastAPI application with AG-UI integration.
+## MCP Server Ports
 
-**Endpoints (auto-generated by AG-UI):**
-- `GET /info` - Agent discovery (lists available agents)
-- `POST /` - Send messages to agent via AG-UI protocol
-- `WebSocket /ws` - Streaming responses (optional)
+- **8001**: kubernetes-mcp-server (Kubernetes cluster operations)
+- **8002**: obs-mcp-server (Prometheus/Thanos metrics)
+- **8003**: cluster-health-mcp-server (Incident detection)
+- **8004**: insights-results-mcp (Red Hat Insights recommendations)
+Important: MCP server installation and configuration happens outside of this repo for current PoC status.
 
-**Custom endpoints:**
-- `GET /` - Basic health check (note: different from POST /)
+## Endpoints
+
+**Auto-generated by AG-UI:**
+- `POST /api/chat` - Send messages to agent (SSE streaming)
+- `GET /api/chat/info` - Agent discovery
+
+**Custom:**
+- `GET /` - Basic health check
 - `GET /health` - Detailed health check
 
-**Key code:**
-```python
-from ag_ui_adk import add_adk_fastapi_endpoint
+## Testing
 
-add_adk_fastapi_endpoint(app, root_agent, path="/")
+```bash
+# Health check
+curl http://localhost:8000/health
+
+# Agent discovery
+curl http://localhost:8000/api/chat/info
+
+# Full integration test
+poetry run dev  # Backend on :8000
+cd ../frontend && npm run dev  # Frontend on :8080
 ```
-
-This one line exposes the entire agent via AG-UI protocol.
-
-### agent/agent.py
-
-Defines the ADK agent.
-
-**Key variable:** `root_agent`
-- Must be named `root_agent` (ADK convention)
-- Uses LiteLLM to connect to OpenAI
-- Kubernetes MCP tools currently commented out (requires npx)
-
-### config.py
-
-Loads configuration from .env file and validates required settings.
-
-## Current Status
-
-✅ **Working:**
-- FastAPI server with AG-UI protocol
-- ADK multi-agent architecture (router → specialized agents)
-- Kubernetes MCP integration (kubernetes-mcp-server :8001)
-- Observability MCP integration (obs-mcp-server :8002)
-- Prometheus metrics querying with natural language
-- Interactive time-series charts with Victory.js
-- PatternFly UI (primary) and CopilotKit (reference) frontends
-- Direct cluster interaction and metrics visualization
 
 ## How It Works
 
-### AG-UI Integration (Current Approach)
-
-The backend uses `add_adk_fastapi_endpoint()` which automatically:
-1. Exposes the agent via AG-UI protocol
-2. Creates `/info` endpoint for agent discovery
-3. Handles conversation state management
-4. Streams responses to frontend
-5. No manual session management needed
-
-**Code:**
-```python
-from ag_ui_adk import ADKAgent, add_adk_fastapi_endpoint
-from agent import root_agent
-
-# Wrap the agent with AG-UI middleware
-adk_agent = ADKAgent(
-    adk_agent=root_agent,
-    app_name="openshift_assistant",
-    user_id="default_user",
-    session_timeout_seconds=3600,
-    use_in_memory_services=True
-)
-
-add_adk_fastapi_endpoint(app, adk_agent, path="/")
-```
-
-That's it! No manual endpoints, minimal configuration code.
-
-### Critical Details
-
-1. **Agent must be named `root_agent`** - ADK convention for AG-UI
-2. **Agent must be wrapped with `ADKAgent`** - Required for AG-UI protocol compatibility
-3. **Agent name in code must match frontend** - Both use "openshift_assistant"
-4. **CORS must allow frontend origin** - Set to http://localhost:8080
-5. **Minimal configuration** - `add_adk_fastapi_endpoint()` handles all protocol details
-
-## Agent Architecture
-
-The backend uses a **multi-agent pattern** with specialized agents for different domains:
-
-### Router Agent (`agent/agent.py`)
-- Entry point for all user queries
-- Analyzes intent and delegates to appropriate specialized agent
-- Uses `transfer_to_agent` to route requests
-
-### Kubernetes Agent (`agent/kubernetes_agent.py`)
-- Handles cluster operations (pods, logs, deployments, etc.)
-- Connects to kubernetes-mcp-server on port 8001
-- READ-ONLY access to cluster resources
-
-### Metrics Agent (`agent/metrics_agent.py`)
-- Handles Prometheus/Thanos metrics queries
-- Connects to obs-mcp-server on port 8002
-- Custom `graph_timeseries_data` tool for charting
-- Follows MANDATORY workflow: list_metrics → get_label_names → get_label_values → query
-
-### Custom Tools (`agent/tools/`)
-- `graph_timeseries_data`: Wraps obs-mcp's `execute_range_query` for frontend visualization
-- Uses `httpx` for HTTP requests to MCP server
-- Returns Prometheus matrix data formatted for Victory.js charts
-
-## Dependencies
-
-Key Python packages (managed by Poetry):
-
-- `fastapi` - Web framework
-- `uvicorn` - ASGI server
-- `google-adk` - Agent Development Kit with MCP support
-- `ag-ui-adk` - AG-UI protocol server for ADK
-- `litellm` - OpenAI adapter for ADK
-- `openai` - OpenAI SDK
-- `httpx` - HTTP client for MCP server communication
-- `aiohttp` - Async HTTP (alternative, httpx preferred)
-- `pydantic` - Data validation
-- `python-dotenv` - Environment variables
-
-## Development Commands
-
-```bash
-# Install dependencies
-poetry install
-
-# Run dev server (auto-reload enabled)
-poetry run dev
-
-# Run ADK web interface for testing
-poetry run adk web . --port 9999
-
-# Check Python version
-poetry run python --version
-
-# View dependencies
-poetry show
-
-# Update dependencies
-poetry update
-```
+1. **Frontend** sends message via `HttpAgent` to `/api/chat`
+2. **AG-UI** handles protocol and routes to `root_agent`
+3. **Router Agent** analyzes intent and delegates to specialized agent
+4. **Specialized Agent** uses MCP tools to query cluster/metrics/incidents/insights/docs
+5. **Response** streams back to frontend via Server-Sent Events (SSE)
 
 ## Troubleshooting
 
-### "Agent not found after runtime sync"
+**"OPENAI_API_KEY environment variable is required"**: Add to `.env` file
 
-**Cause:** Frontend can't discover the agent.
+**"Agent not found"**: Check `agent="openshift_assistant"` matches frontend config
 
-**Fix:**
-1. Check backend is running on :8000
-2. Verify `add_adk_fastapi_endpoint(app, root_agent, path="/")` is called
-3. Test agent discovery: `curl http://localhost:8000/info`
-4. Check agent name matches in frontend and backend
-5. Verify CORS allows frontend origin
-
-### "ModuleNotFoundError: No module named 'ag_ui_adk'"
-
-**Cause:** AG-UI package not installed.
-
-**Fix:**
-```bash
-poetry install
-```
-
-### MCP connection error
-
-**Cause:** MCP tool server not running or npx not installed.
-
-**Fix:**
-- Check if npx is installed: `which npx`
-- Verify MCP tools are commented out in `agent/agent.py`
-- Install Node.js 24 if needed
-
-### Import errors in IDE
-
-**Cause:** IDE doesn't see Poetry virtualenv.
-
-**Fix:**
-- Ignore IDE errors - run with `poetry run`
-- Commands will work even if IDE shows red squiggles
-- Restart TypeScript server in IDE if needed
-
-## Architecture Details
-
-### Why AG-UI?
-
-**Problem:** ADK agents are Python, frontends are JavaScript. How do they communicate?
-
-**Solution:** AG-UI is an open protocol that:
-- Standardizes agent-frontend communication
-- Handles session management automatically
-- Supports streaming responses
-- Works with any frontend framework (React, Vue, etc.)
-
-### How Frontend Connects
-
-Frontend uses `HttpAgent` from `@ag-ui/client`:
-
-```typescript
-import { HttpAgent } from "@ag-ui/client";
-
-const runtime = new CopilotRuntime({
-  agents: {
-    openshift_assistant: new HttpAgent({ url: "http://localhost:8000/" })
-  }
-});
-```
-
-This discovers and connects to the agent automatically.
-
-## What Changed Recently
-
-This codebase was recently refactored to use AG-UI:
-
-**Removed (old approach):**
-- ❌ Manual `/copilotkit` endpoint
-- ❌ Manual session management code
-- ❌ `Runner` and `InMemorySessionService` usage
-- ❌ `/chat` and `/ws/chat` endpoints
-
-**Added (new approach):**
-- ✅ `ag-ui-adk` package
-- ✅ `add_adk_fastapi_endpoint()` - one-line integration
-- ✅ Automatic AG-UI protocol endpoints
-
-**Result:** Simpler, cleaner code that follows ADK best practices.
-
-## Additional Resources
-
-- **Complete Tech Stack Docs:** See `TECH_STACK.md` in project root
-- **ADK Documentation:** https://google.github.io/adk-docs/
-- **AG-UI Documentation:** https://google.github.io/adk-docs/tools/third-party/ag-ui/
-- **CopilotKit + ADK Guide:** https://docs.copilotkit.ai/adk
+**MCP connection error**: Ensure MCP servers are running on ports 8001-8004
